@@ -1,0 +1,86 @@
+---
+title: "soil"
+output: html_document
+date: "2023-05-12"
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(apsimx)
+library(listviewer)
+
+# Thanh Hoa: 19.8075° N, 105.7764° E
+
+# geolocation long/lat
+
+sp <- apsimx_soil_profile(crops = c("Maize", "Sugarcane", "Peanut"))
+require(ggplot2)
+plot(sp)
+sp1 <- get_isric_soil_profile(lonlat = c(105, 19))
+sp2 <- get_isric_soil_profile(lonlat = c(105, 19))
+sp3 <- get_isric_soil_profile(lonlat = c(105, 19))
+sp1$soil[[paste0("Maize",".LL")]] <- sp1$soil$LL15 ## Without better information
+sp1$soil[[paste0("Maize","XF")]] <- sp1$soil[[paste0("Wheat.XF")]] ## Without better information  
+sp1$soil[[paste0("Maize","KL")]] <- sp1$soil[[paste0("Wheat.KL")]] ## Without better information 
+sp2$soil[[paste0("Sugarcane",".LL")]] <- sp2$soil$LL15 ## Without better information
+sp2$soil[[paste0("Sugarcane","XF")]] <- sp2$soil[[paste0("Wheat.XF")]] ## Without better information  
+sp2$soil[[paste0("Sugarcane","KL")]] <- sp2$soil[[paste0("Wheat.KL")]] ## Without better information 
+sp3$soil[[paste0("Peanut",".LL")]] <- sp3$soil$LL15 ## Without better information
+sp3$soil[[paste0("Peanut","XF")]] <- sp3$soil[[paste0("Wheat.XF")]] ## Without better information  
+sp3$soil[[paste0("Peanut","KL")]] <- sp3$soil[[paste0("Wheat.KL")]] ## Without better information 
+
+plot(sp1)
+sp1$crops <- c("Maize")
+sp2$crops <- c("Sugarcane")
+sp3$crops <- c("Peanut")
+print(sp1$crops)
+
+```
+
+```{r}
+plot(sp1, property = "BD")
+```
+
+```{r}
+sdir <- "/Applications/APSIM2023.2.7146.0.app/Contents/Resources/Examples"
+tdir <- "/Users/fuhsinliao/Downloads/Assignment2/Aspimx"
+edit_apsimx_replace_soil_profile(
+  file = "Maize.apsimx",
+  src.dir = sdir,
+  wrt.dir = tdir,
+  soil.profile = sp1,
+  edit.tag = "-lonlat_105_19_first",
+  overwrite = FALSE,
+  verbose = TRUE
+)
+view_apsimx("Maize.apsimx", src.dir = sdir)
+
+edit_apsimx_replace_soil_profile(
+  file = "Sugarcane.apsimx",
+  src.dir = sdir,
+  wrt.dir = tdir,
+  soil.profile = sp2,
+  edit.tag = "-lonlat_105_19_first",
+  overwrite = FALSE,
+  verbose = TRUE
+)
+view_apsimx("Sugarcane.apsimx", src.dir = sdir)
+
+edit_apsimx_replace_soil_profile(
+  file = "Peanut.apsimx",
+  src.dir = sdir,
+  wrt.dir = tdir,
+  soil.profile = sp2,
+  edit.tag = "-lonlat_105_19_first",
+  overwrite = FALSE,
+  verbose = TRUE
+)
+view_apsimx("Peanut.apsimx", src.dir = sdir)
+```
+
+
+
+
+
+
