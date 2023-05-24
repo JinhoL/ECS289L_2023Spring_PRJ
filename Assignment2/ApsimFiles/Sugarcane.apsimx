@@ -1,0 +1,760 @@
+{
+  "$type": "Models.Core.Simulations, Models",
+  "ExplorerWidth": 300,
+  "Version": 160,
+  "Name": "Simulations",
+  "ResourceName": null,
+  "Children": [
+    {
+      "$type": "Models.Storage.DataStore, Models",
+      "useFirebird": false,
+      "CustomFileName": null,
+      "Name": "DataStore",
+      "ResourceName": null,
+      "Children": [],
+      "Enabled": true,
+      "ReadOnly": false
+    },
+    {
+      "$type": "Models.Core.Simulation, Models",
+      "Descriptors": null,
+      "Name": "Sugarcane",
+      "ResourceName": null,
+      "Children": [
+        {
+          "$type": "Models.Climate.Weather, Models",
+          "ConstantsFile": null,
+          "FileName": "Climate_Rcp45_lat19_lon105_v2.met",
+          "ExcelWorkSheetName": "",
+          "Name": "Weather",
+          "ResourceName": null,
+          "Children": [],
+          "Enabled": true,
+          "ReadOnly": false
+        },
+        {
+          "$type": "Models.Clock, Models",
+          "Start": "2011-01-01T00:00:00",
+          "End": "2100-12-31T00:00:00",
+          "Name": "clock",
+          "ResourceName": null,
+          "Children": [],
+          "Enabled": true,
+          "ReadOnly": false
+        },
+        {
+          "$type": "Models.Summary, Models",
+          "Verbosity": 100,
+          "Name": "summaryfile",
+          "ResourceName": null,
+          "Children": [],
+          "Enabled": true,
+          "ReadOnly": false
+        },
+        {
+          "$type": "Models.MicroClimate, Models",
+          "a_interception": 0.0,
+          "b_interception": 1.0,
+          "c_interception": 0.0,
+          "d_interception": 0.0,
+          "SoilHeatFluxFraction": 0.4,
+          "MinimumHeightDiffForNewLayer": 0.0,
+          "NightInterceptionFraction": 0.5,
+          "ReferenceHeight": 2.0,
+          "Name": "MicroClimate",
+          "ResourceName": null,
+          "Children": [],
+          "Enabled": true,
+          "ReadOnly": false
+        },
+        {
+          "$type": "Models.Core.Zone, Models",
+          "Area": 1.0,
+          "Slope": 0.0,
+          "AspectAngle": 0.0,
+          "Altitude": 50.0,
+          "Name": "Field",
+          "ResourceName": null,
+          "Children": [
+            {
+              "$type": "Models.Fertiliser, Models",
+              "Name": "fertiliser",
+              "ResourceName": "Fertiliser",
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Sugarcane, Models",
+              "maxt_lb": 0.0,
+              "Name": "Sugarcane",
+              "ResourceName": "Sugarcane",
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Core.Folder, Models",
+              "ShowInDocs": true,
+              "GraphsPerPage": 6,
+              "Name": "Manager folder",
+              "ResourceName": null,
+              "Children": [
+                {
+                  "$type": "Models.Manager, Models",
+                  "Code": "using Models.Soils;\nusing System.Linq;\nusing System;\nusing Models.Core;\nusing Models.PMF;\nusing APSIM.Shared.Utilities;\n\nnamespace Models\n{\n    [Serializable]\n    [System.Xml.Serialization.XmlInclude(typeof(Model))]\n    public class Script : Model\n    {\n        [Link] Clock Clock;\n        [Link] Sugarcane Sugarcane;\n        \n        [Description(\"Enter planting date (dd-mmm)\")]\n        public string planting_day { get; set; }\n        [Description(\"Duration of a plant crop (days) (30days/mth x 15mths)\")]\n        public int    plantlen { get; set; }\n        [Description(\"Stalk density of plant crop (/m2)\")]\n        public double plant_stalks { get; set; }\n        [Description(\"Planting variety\")]\n        [Display(Type=DisplayType.CultivarName, PlantName = \"Sugarcane\")]\n        public string variety { get; set; }\n        [Description(\"Planting depth (mm)\")]\n        public double sowing_depth { get; set; }\n        [Description(\"Number of ratoons before EndCrop\")]  \n        public int    NoRatoons { get; set; }\n        [Description(\"Duration of a ratoon crop (days) (30days/mth x 13mths)\")]\n        public int    ratoonlen { get; set; }\n        [Description(\"Stalk density of ratoon crop (/m2)\")]\n        public double ratoon_stalks { get; set; }\n        \n\n        private int dah;\n        //Remove this later, I don't think they use it. Days After Harvest.\n        \n        //two below are used for rotations. Remove this. I don't think ApsimX does rotations like this.\n        private int nextcrop;\n        private int fallowin;\n\n        \n        [EventSubscribe(\"StartOfSimulation\")]\n        private void OnStartOfSimulation(object sender, EventArgs e)\n        {\n            //Rotation variables. Not sure if these are still needed in ApsimX rotations\n            nextcrop = 0;\n            fallowin = 0;\n        }\n\n\n        [EventSubscribe(\"StartOfDay\")]\n        private void OnStartOfDay(object sender, EventArgs e)\n        {\n\n            //! Initialise and set a time counter for entire run\n            dah = 0;\n\n\n            if (Sugarcane.crop_status == \"alive\")\n            {\n                dah = 0;\n\n                //! Set harvest dates for each crop phase\n                if (((Sugarcane.DaysAfterSowing == plantlen) && (Sugarcane.ratoon_no == 0))\n                    || ((Sugarcane.DaysAfterSowing == ratoonlen) && (Sugarcane.ratoon_no > 0)))\n                {\n                    \n                    Sugarcane.HarvestCrop();\n                    if (Sugarcane.ratoon_no == NoRatoons + 1)\n                    {\n                        //! plough the crop out\n                        Sugarcane.KillCrop();\n                        Sugarcane.EndCrop();\n                    }\n                    else\n                    {\n                        //! Set stalk density\n                        Sugarcane.plants = ratoon_stalks;\n                    }\n                }\n                else\n                {\n                    //! We have not reached the harvest date for this ratoon.\n                }\n            }\n            else if (Sugarcane.crop_status == \"dead\")\n            {\n                Sugarcane.HarvestCrop();\n                Sugarcane.EndCrop();\n            }\n            else if ((Sugarcane.crop_status == \"out\") && (DateUtilities.DatesEqual(planting_day, Clock.Today)))\n            {\n                Sugarcane.SowNewPlant(PlantingDensity: 10, Depth: sowing_depth, CultivarName: variety);\n                Sugarcane.plants = plant_stalks;\n                dah = 0;\n            }\n            else\n            {\n                dah = dah + 1;\n            }\n     \n        }\n    }\n}\n",
+                  "Parameters": [
+                    {
+                      "Key": "planting_day",
+                      "Value": "1-july"
+                    },
+                    {
+                      "Key": "plantlen",
+                      "Value": "720"
+                    },
+                    {
+                      "Key": "plant_stalks",
+                      "Value": "10"
+                    },
+                    {
+                      "Key": "variety",
+                      "Value": "q117"
+                    },
+                    {
+                      "Key": "sowing_depth",
+                      "Value": "70"
+                    },
+                    {
+                      "Key": "NoRatoons",
+                      "Value": "4"
+                    },
+                    {
+                      "Key": "ratoonlen",
+                      "Value": "360"
+                    },
+                    {
+                      "Key": "ratoon_stalks",
+                      "Value": "10"
+                    }
+                  ],
+                  "Name": "SUGAR management",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Manager, Models",
+                  "Code": "using Models.Soils.Nutrients;\r\nusing Models.Interfaces;\r\nusing APSIM.Shared.Utilities;\r\nusing Models.Soils;\r\nusing Models.Soils.Nutrients;\r\nusing Models.PMF;\r\nusing Models.Core;\r\nusing System;\r\nusing System.Linq;\r\n\r\nnamespace Models\r\n{\r\n    [Serializable]\r\n    [System.Xml.Serialization.XmlInclude(typeof(Model))]\r\n    public class Script : Model\r\n    {\r\n        [Link] private Clock Clock;\r\n        [Link] private Soil Soil;\r\n        [Link] private Fertiliser Fertiliser;\r\n        [Link] private Summary Summary;\r\n        private double N_topsoil;\r\n        [Link(ByName = true)]\r\n        private ISolute NO3;\r\n        [Link(ByName = true)]\r\n        private ISolute NH4;\r\n\r\n        \r\n        [Description(\"Fertilise on this date (dd-mmm)\")]\r\n        public string fert_date { get; set; }\r\n        \r\n        [Description(\"Don't add fertiliser if N in top 2 layers exceeds (kg/ha)\")]\r\n        public double fert_criteria { get; set; }\r\n        \r\n        [Description(\"Amount to apply (kg/ha)\")]\r\n        public double fert_amount { get; set; }\r\n        \r\n        [Description(\"Type of fertilser to apply\")]\r\n        public string fert_type { get; set; }\r\n    \r\n\r\n\r\n        /*\r\n         if (today = date('[fert_date]') then\r\n            N_topsoil = no3(1) + nh4(1) + no3(2) + nh4(2)\r\n            if (N_topsoil < [fert_criteria]) then\r\n               [fertmodule] apply amount = [fert_amount] (kg/ha), depth = 50 (mm), type = [fert_type] ()\r\n            endif\r\n         endif \r\n        */\r\n        \r\n        \r\n        [EventSubscribe(\"StartOfDay\")]\r\n        private void OnStartOfDay(object sender, EventArgs e)\r\n        {\r\n\r\n            if (DateUtilities.DatesEqual(fert_date, Clock.Today))\r\n            {\r\n                N_topsoil = NO3.kgha[1] + NH4.kgha[1] + NO3.kgha[2] + NH4.kgha[2];                    \r\n                if (N_topsoil < fert_criteria)\r\n                {\r\n                    Fertiliser.Apply(Amount: fert_amount, Depth: 50, Type: Fertiliser.Types.UreaN);\r\n                }\r\n            }\r\n\r\n        }\r\n      \r\n    }\r\n}\r\n",
+                  "Parameters": [
+                    {
+                      "Key": "fert_date",
+                      "Value": "1-Dec, 1-Feb, 1-March, 1-Apr, 1-Jul"
+                    },
+                    {
+                      "Key": "fert_criteria",
+                      "Value": "1000"
+                    },
+                    {
+                      "Key": "fert_amount",
+                      "Value": "100"
+                    },
+                    {
+                      "Key": "fert_type",
+                      "Value": "NPK"
+                    }
+                  ],
+                  "Name": "Fertilise on fixed date",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                }
+              ],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Report, Models",
+              "VariableNames": [
+                "[Clock].Today",
+                "[Sugarcane].cane_wt as SugarcaneYield",
+                "[Sugarcane].sucrose_wt",
+                "[Sugarcane].height",
+                "[Sugarcane].WaterDemand"
+              ],
+              "EventNames": [
+                "[Sugarcane].Harvesting"
+              ],
+              "GroupByVariableName": null,
+              "Name": "SugarcaneReport",
+              "ResourceName": null,
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Surface.SurfaceOrganicMatter, Models",
+              "SurfOM": [],
+              "Canopies": [],
+              "InitialResidueName": "sugar_trash",
+              "InitialResidueType": "Sugarcane",
+              "InitialResidueMass": 1000.0,
+              "InitialStandingFraction": 1.0,
+              "InitialCPR": 0.0,
+              "InitialCNR": 80.0,
+              "Name": "Surface Organic Matter",
+              "ResourceName": "SurfaceOrganicMatter",
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Manager, Models",
+              "Code": "using Models.Soils;\r\nusing System;\r\nusing System.Linq;\r\nusing Models.Core;\r\nusing Models.PMF;\r\nnamespace Models\r\n{\r\n    [Serializable]\r\n    public class Script : Model\r\n    {\r\n        [Link] Clock Clock;\r\n        [Link] Fertiliser Fertiliser;\r\n        \r\n        [Description(\"Crop to be fertilised\")]\r\n        public IPlant Crop { get; set; }\r\n\r\n        [Description(\"Type of fertiliser to apply? \")] \r\n        public Fertiliser.Types FertiliserType { get; set; }\r\n    \r\n        [Description(\"Amount of fertiliser to be applied (kg/ha)\")]\r\n        public double Amount { get; set; }\r\n        \r\n        [EventSubscribe(\"Sowing\")]\r\n        private void OnSowing(object sender, EventArgs e)\r\n        {\r\n            Model crop = sender as Model;\r\n            if (Crop != null && crop.Name.ToLower() == (Crop as IModel).Name.ToLower())\r\n                Fertiliser.Apply(Amount: Amount, Type: FertiliserType);\r\n        }\r\n    }\r\n}\r\n",
+              "Parameters": [
+                {
+                  "Key": "Crop",
+                  "Value": "[Sugarcane]"
+                },
+                {
+                  "Key": "FertiliserType",
+                  "Value": "DAP"
+                },
+                {
+                  "Key": "Amount",
+                  "Value": "50"
+                }
+              ],
+              "Name": "Fertilise at sowing",
+              "ResourceName": null,
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            },
+            {
+              "$type": "Models.Soils.Soil, Models",
+              "RecordNumber": 0,
+              "ASCOrder": null,
+              "ASCSubOrder": null,
+              "SoilType": "SoilType =  clay loam",
+              "LocalName": null,
+              "Site": null,
+              "NearestTown": null,
+              "Region": null,
+              "State": null,
+              "Country": null,
+              "NaturalVegetation": null,
+              "ApsoilNumber": "0",
+              "Latitude": 19.0,
+              "Longitude": 105.0,
+              "LocationAccuracy": null,
+              "YearOfSampling": null,
+              "DataSource": "Original source is www.isric.org. See: https://www.isric.org/explore/soilgrids/faq-soilgrids  2023-05-17 18:47:57.621079",
+              "Comments": "resolution = 250m - taxonomic classification name = clay loam - drainage class = NA - elevation = NA - slope = NA - geomdesc = NA",
+              "Name": "SoilType =  clay loam",
+              "ResourceName": null,
+              "Children": [
+                {
+                  "$type": "Models.Soils.Water, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "InitialValues": [
+                    0.322,
+                    0.322,
+                    0.333,
+                    0.345,
+                    0.366,
+                    0.356
+                  ],
+                  "InitialPAWmm": 256.90000000000003,
+                  "RelativeTo": "LL15",
+                  "FilledFromTop": true,
+                  "Name": "Water",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Physical, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "ParticleSizeClay": [
+                    32.5,
+                    32.3,
+                    34.2,
+                    36.3,
+                    39.8,
+                    38.0
+                  ],
+                  "ParticleSizeSand": [
+                    37.1,
+                    36.7,
+                    35.7,
+                    34.9,
+                    33.2,
+                    33.4
+                  ],
+                  "ParticleSizeSilt": [
+                    30.4,
+                    31.0,
+                    30.1,
+                    28.8,
+                    27.0,
+                    28.6
+                  ],
+                  "Rocks": null,
+                  "Texture": null,
+                  "BD": [
+                    1.26,
+                    1.31,
+                    1.39,
+                    1.41,
+                    1.44,
+                    1.44
+                  ],
+                  "AirDry": [
+                    0.098,
+                    0.194,
+                    0.205,
+                    0.217,
+                    0.238,
+                    0.227
+                  ],
+                  "LL15": [
+                    0.196,
+                    0.194,
+                    0.205,
+                    0.217,
+                    0.238,
+                    0.227
+                  ],
+                  "DUL": [
+                    0.322,
+                    0.322,
+                    0.333,
+                    0.345,
+                    0.366,
+                    0.356
+                  ],
+                  "SAT": [
+                    0.422,
+                    0.422,
+                    0.427,
+                    0.433,
+                    0.444,
+                    0.439
+                  ],
+                  "KS": [
+                    258.602,
+                    261.571,
+                    216.109,
+                    175.535,
+                    123.982,
+                    148.375
+                  ],
+                  "BDMetadata": null,
+                  "AirDryMetadata": null,
+                  "LL15Metadata": null,
+                  "DULMetadata": null,
+                  "SATMetadata": null,
+                  "KSMetadata": null,
+                  "RocksMetadata": null,
+                  "TextureMetadata": null,
+                  "ParticleSizeSandMetadata": null,
+                  "ParticleSizeSiltMetadata": null,
+                  "ParticleSizeClayMetadata": null,
+                  "Name": "Physical",
+                  "ResourceName": null,
+                  "Children": [
+                    {
+                      "$type": "Models.Soils.SoilCrop, Models",
+                      "LL": [
+                        0.196,
+                        0.194,
+                        0.205,
+                        0.217,
+                        0.238,
+                        0.227
+                      ],
+                      "KL": [
+                        0.06,
+                        0.049,
+                        0.04,
+                        0.033,
+                        0.027,
+                        0.022
+                      ],
+                      "XF": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ],
+                      "LLMetadata": null,
+                      "KLMetadata": null,
+                      "XFMetadata": null,
+                      "Name": "SugarcaneSoil",
+                      "ResourceName": null,
+                      "Children": [],
+                      "Enabled": true,
+                      "ReadOnly": false
+                    }
+                  ],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.WaterModel.WaterBalance, Models",
+                  "SummerDate": "1-Nov",
+                  "SummerU": 4.0,
+                  "SummerCona": 3.0,
+                  "WinterDate": "1-Apr",
+                  "WinterU": 4.0,
+                  "WinterCona": 3.0,
+                  "DiffusConst": 40.0,
+                  "DiffusSlope": 16.0,
+                  "Salb": 0.13,
+                  "CN2Bare": 73.0,
+                  "CNRed": 20.0,
+                  "CNCov": 0.8,
+                  "DischargeWidth": "NaN",
+                  "CatchmentArea": "NaN",
+                  "PSIDul": -100.0,
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "SWCON": [
+                    0.4,
+                    0.4,
+                    0.4,
+                    0.4,
+                    0.4,
+                    0.4
+                  ],
+                  "KLAT": null,
+                  "Name": "SoilWater",
+                  "ResourceName": "WaterBalance",
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Organic, Models",
+                  "FOMCNRatio": 70.0,
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "Carbon": [
+                    2.11,
+                    1.56,
+                    1.09,
+                    0.91,
+                    0.55,
+                    0.46
+                  ],
+                  "CarbonUnits": 0,
+                  "SoilCNRatio": [
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0
+                  ],
+                  "FBiom": [
+                    0.04,
+                    0.033,
+                    0.027,
+                    0.022,
+                    0.018,
+                    0.015
+                  ],
+                  "FInert": [
+                    0.8,
+                    0.808,
+                    0.816,
+                    0.824,
+                    0.833,
+                    0.841
+                  ],
+                  "FOM": [
+                    150.0,
+                    122.81,
+                    100.548,
+                    82.322,
+                    67.399,
+                    55.182
+                  ],
+                  "CarbonMetadata": null,
+                  "FOMMetadata": null,
+                  "Name": "Organic",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Chemical, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "PH": [
+                    6.0,
+                    6.0,
+                    6.1,
+                    6.2,
+                    6.2,
+                    6.3
+                  ],
+                  "PHUnits": 0,
+                  "EC": null,
+                  "ESP": null,
+                  "ECMetadata": null,
+                  "CLMetadata": null,
+                  "ESPMetadata": null,
+                  "PHMetadata": null,
+                  "Name": "Chemical",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.CERESSoilTemperature, Models",
+                  "Name": "Temperature",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Nutrients.Nutrient, Models",
+                  "Name": "Nutrient",
+                  "ResourceName": "Nutrient",
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Solute, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "InitialValues": [
+                    0.5,
+                    0.495,
+                    0.49,
+                    0.485,
+                    0.48,
+                    0.476
+                  ],
+                  "InitialValuesUnits": 0,
+                  "WaterTableConcentration": 0.0,
+                  "D0": 0.0,
+                  "Exco": null,
+                  "FIP": null,
+                  "DepthConstant": 0.0,
+                  "MaxDepthSoluteAccessible": 0.0,
+                  "RunoffEffectivenessAtMovingSolute": 0.0,
+                  "MaxEffectiveRunoff": 0.0,
+                  "Name": "NO3",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Solute, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "InitialValues": [
+                    0.05,
+                    0.05,
+                    0.049,
+                    0.049,
+                    0.048,
+                    0.048
+                  ],
+                  "InitialValuesUnits": 0,
+                  "WaterTableConcentration": 0.0,
+                  "D0": 0.0,
+                  "Exco": null,
+                  "FIP": null,
+                  "DepthConstant": 0.0,
+                  "MaxDepthSoluteAccessible": 0.0,
+                  "RunoffEffectivenessAtMovingSolute": 0.0,
+                  "MaxEffectiveRunoff": 0.0,
+                  "Name": "NH4",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                },
+                {
+                  "$type": "Models.Soils.Solute, Models",
+                  "Thickness": [
+                    50.0,
+                    100.0,
+                    150.0,
+                    300.0,
+                    400.0,
+                    1000.0
+                  ],
+                  "InitialValues": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                  ],
+                  "InitialValuesUnits": 1,
+                  "WaterTableConcentration": 0.0,
+                  "D0": 0.0,
+                  "Exco": null,
+                  "FIP": null,
+                  "DepthConstant": 0.0,
+                  "MaxDepthSoluteAccessible": 0.0,
+                  "RunoffEffectivenessAtMovingSolute": 0.0,
+                  "MaxEffectiveRunoff": 0.0,
+                  "Name": "Urea",
+                  "ResourceName": null,
+                  "Children": [],
+                  "Enabled": true,
+                  "ReadOnly": false
+                }
+              ],
+              "Enabled": true,
+              "ReadOnly": false
+            }
+          ],
+          "Enabled": true,
+          "ReadOnly": false
+        }
+      ],
+      "Enabled": true,
+      "ReadOnly": false
+    },
+    {
+      "$type": "Models.Core.Folder, Models",
+      "ShowInDocs": false,
+      "GraphsPerPage": 6,
+      "Name": "Graphs",
+      "ResourceName": null,
+      "Children": [
+        {
+          "$type": "Models.Graph, Models",
+          "Caption": null,
+          "Axis": [
+            {
+              "$type": "APSIM.Shared.Graphing.Axis, APSIM.Shared",
+              "Title": null,
+              "Position": 3,
+              "Inverted": false,
+              "CrossesAtZero": false,
+              "Minimum": null,
+              "Maximum": null,
+              "Interval": null
+            },
+            {
+              "$type": "APSIM.Shared.Graphing.Axis, APSIM.Shared",
+              "Title": null,
+              "Position": 0,
+              "Inverted": false,
+              "CrossesAtZero": false,
+              "Minimum": null,
+              "Maximum": null,
+              "Interval": null
+            }
+          ],
+          "LegendPosition": 0,
+          "LegendOrientation": 0,
+          "AnnotationLocation": 0,
+          "DisabledSeries": [],
+          "LegendOutsideGraph": false,
+          "Name": "Sugarcane Yield Series",
+          "ResourceName": null,
+          "Children": [
+            {
+              "$type": "Models.Series, Models",
+              "Type": 1,
+              "XAxis": 3,
+              "YAxis": 0,
+              "ColourArgb": -16736653,
+              "FactorToVaryColours": null,
+              "FactorToVaryMarkers": null,
+              "FactorToVaryLines": null,
+              "Marker": 0,
+              "MarkerSize": 0,
+              "Line": 0,
+              "LineThickness": 1,
+              "TableName": "SugarcaneReport",
+              "XFieldName": "Clock.Today",
+              "YFieldName": "SugarcaneYield",
+              "X2FieldName": null,
+              "Y2FieldName": null,
+              "ShowInLegend": false,
+              "IncludeSeriesNameInLegend": false,
+              "Cumulative": false,
+              "CumulativeX": false,
+              "Filter": null,
+              "Name": "SugarcaneYield",
+              "ResourceName": null,
+              "Children": [],
+              "Enabled": true,
+              "ReadOnly": false
+            }
+          ],
+          "Enabled": true,
+          "ReadOnly": false
+        }
+      ],
+      "Enabled": true,
+      "ReadOnly": false
+    }
+  ],
+  "Enabled": true,
+  "ReadOnly": false
+}
