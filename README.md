@@ -21,3 +21,13 @@ ECS 289L, 2023 Spring Quarter, Project Github.
 - GAEZ
 
   - Get a .tif file link from: https://gaez.fao.org/pages/data-viewer
+
+
+
+## Assignment 3
+
+1. Fetch yield, lon_lat, soil, and weather csv files.
+2. Run "Merge_Weather_Soil_Yield_Weekly.ipynb" to generate weekly data for ML.
+3. ML pipeline (2 approaches)
+   - Original method: Run "ML_pipeline.py"
+   - Yield Trend method: run "generateKansasAccumulatedYieldData.py" and "ML_YieldTrend.py"
